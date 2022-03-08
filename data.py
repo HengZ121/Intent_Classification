@@ -4,6 +4,7 @@ Loading Data into script
 import torch
 import pandas as pd
 
+from sklearn.utils import shuffle
 from gensim.models import Word2Vec
 
 
@@ -19,9 +20,15 @@ class Dataset():
 
         ### Remove rows with missing value(s)
         df = df.dropna()
+        ### Shuffle the rows
+        df = shuffle(df)
+
+        print(df)
 
         ### Split sentences into list by words
         corpus = [sent.split() for sent in df['sentence']]
+        
+        # print(df['label'].value_counts())
 
         ### Replace the string label with numeric label
         df.label = pd.Categorical(df.label)
