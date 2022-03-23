@@ -1,10 +1,11 @@
 '''
 Loading Data into script
 '''
-from html import entities
 import torch
+import numpy as np
 import pandas as pd
-
+import gensim.downloader
+from tqdm import tqdm
 from sklearn.utils import shuffle
 from gensim.models import Word2Vec
 
@@ -15,8 +16,8 @@ class Dataset():
     dataset: the name of dataset to be loaded
     '''
     def __init__(self, dataset):
-        self.sentence = [] 
         self.vector = [] ### fixed-size vectors
+        self.sentence = []
         self.label = []
 
         ##### -----------------------------------------Get Dataset---------------------------------
@@ -26,19 +27,33 @@ class Dataset():
         
         # print(df['label'].value_counts())
         ##### -----------------------------------------Data Preprocessing--------------------------
-        ### Identify minority class
-        self.class_num = len(df['label'].unique())
+        ### Replace the string label with numeric label
+        df.label = pd.Categorical(df.label)
+        df['label'] = df.label.cat.codes
+
+        ### Drop minority class (too few samples)
+        class_num = len(df['label'].unique())
         minority_class = []
         entries = len(df)
-        for cls in range (self.class_num):
-            if len(df.index[df['label'] == cls]) < entries/self.class_num:
+        for cls in range (class_num):
+            if len(df.index[df['label'] == cls]) < entries/class_num:
                 minority_class.append(cls)
-
-        ### Drop minority class
         for mcls in minority_class:
             df = df.drop(df[df.label == mcls].index)
 
-        ### Replace the string label with numeric label
+        ### Duplicate minority class
+        df.label = pd.Categorical(df.label)
+        df['label'] = df.label.cat.codes
+        class_num = len(df['label'].unique())
+        minority_class = []
+        entries = len(df)
+        for cls in range (class_num):
+            if len(df.index[df['label'] == cls]) <= 70:
+                minority_class.append(cls)
+
+        for mcls in minority_class:
+            df.append(df[df['label'] == mcls])
+            # df = df.drop(df[df['label'] == mcls].index)
         df.label = pd.Categorical(df.label)
         df['label'] = df.label.cat.codes
 
@@ -55,15 +70,27 @@ class Dataset():
             if len(sent) > self.max_len:
                 self.max_len = len(sent)
 
+        vector_size = 5
         ### Convert Sentences into Matrix with Paddings (Making all matrix have the same size) (size = max_len to make the matrix a square)
-        model = Word2Vec(corpus, min_count=1, vector_size= self.max_len, window =3, sg = 1)
-        
-        for sent in corpus:
+        model = Word2Vec(corpus, min_count=1, vector_size= vector_size, window =4, sg = 1, epochs = 10)
+
+        print("Preprocessing Sentences")
+        for sent in tqdm(corpus):
             matrix = []
             for word in sent:
                 matrix.append(model.wv[word])
-            for _ in range(self.max_len - len(sent)): ### Padding
-                matrix.append([0 for _ in range(self.max_len)])
+            padding_flag = True
+            if t := self.max_len//len(matrix)>1:
+                for _ in range(t):
+                    matrix += matrix
+            for _ in range(self.max_len - len(matrix)): ### Padding
+                if padding_flag:
+                    matrix.insert(0, np.array([0 for _ in range(vector_size)], dtype='float32'))
+                    padding_flag = not padding_flag
+                else:
+                    matrix.append(np.array([0 for _ in range(vector_size)], dtype='float32'))
+                    padding_flag = not padding_flag
+
             self.vector.append(matrix)
 
         self.label = df.label.tolist()
@@ -81,4 +108,4 @@ class Dataset():
         x = self.vector[index]
         y = self.label[index]
 
-        return torch.tensor(x), torch.tensor(y)
+        return torch.tensor(x), torch.tensor(y), self.sentence[index]
