@@ -55,7 +55,7 @@ for train_index, test_index in kf.split(dataset.vector):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(cnn.parameters(), lr=learning_rate, momentum=0.9)
     print("Start Training")
-    for epoch in range(1, 51):  # loop over the dataset multiple times
+    for epoch in range(1, 61):  # loop over the dataset multiple times
         i = 0
         print("Epoche: ", epoch)
         for data in tqdm(trainloader):
@@ -89,9 +89,11 @@ for train_index, test_index in kf.split(dataset.vector):
     for data in tqdm(testloader):
         input, label, sent = data
         input = torch.tensor(np.array(input).reshape(1,1,28,5))
-        pred = list((cnn(input))[0])
-        y_predict.append(p := int(pred.index(max(pred))))
+        pred = cnn(input).tolist()[0]
+        y_predict.append(p := pred.index(max(pred)))
         if p != int(label):
+            print("-------------Wrong Case---------------")
+            print(pred)
             print(sent, " real label: ", int(label), " output label: ", p)
         y_true.append(int(label))
     print("Testing Complete")
